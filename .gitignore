@@ -36,6 +36,7 @@
 .settings
 .idea/
 .history/
+build/
 
 # CMake
 cmake-build-*/
