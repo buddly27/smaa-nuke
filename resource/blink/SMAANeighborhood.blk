@@ -1,0 +1,113 @@
+kernel SMAANeighborhood : ImageComputationKernel<ePixelWise>
+{
+    Image<eRead, eAccessRandom, eEdgeClamped> input;
+    Image<eRead, eAccessRandom, eEdgeClamped> blend_tex;
+    Image<eWrite, eAccessPoint> output;
+
+    /**
+     * Apply blending to neighborhood pixels.
+     *
+     * @param pos Current image position.
+     */
+    void process(int2 pos) {
+        float4 in_blend = read_blend(pos.x, pos.y);
+
+        // Fetch the blending weights for current pixel:
+        float4 a(
+            blend_tex(pos.x + 1, pos.y, 3),
+            blend_tex(pos.x, pos.y + 1, 1),
+            in_blend[2],
+            in_blend[0]
+        );
+
+        float4 color;
+
+        if (dot(a, float4(1.0, 1.0, 1.0, 1.0)) < 0.01f) {
+            color = read(pos.x, pos.y);
+        }
+        else {
+            bool h = max(a[0], a[2]) > max(a[1], a[3]);
+
+            float4 blending_offset(0.0f, a[1], 0.0f, a[3]);
+            float2 blending_weight(a[1], a[3]);
+
+            if (h) {
+                blending_offset = float4(a[0], 0.0f, a[2], 0.0f);
+                blending_weight = float2(a[0], a[2]);
+            }
+
+            blending_weight /= dot(blending_weight, float2(1.0f, 1.0f));
+
+            float4 coord(
+                pos.x + blending_offset[0],
+                pos.y + blending_offset[1],
+                pos.x - blending_offset[2],
+                pos.y - blending_offset[3]
+            );
+
+            color = blending_weight[0] * read(coord[0], coord[1]);
+            color += blending_weight[1] * read(coord[2], coord[3]);
+        }
+
+        write(color);
+    }
+
+    /**
+     * Return RGBA pixel from source input.
+     *
+     * @param x Horizontal integer position.
+     * @param y Vertical integer position.
+     */
+    float4 read(int x, int y) {
+        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
+
+        for (int ch = 0; ch <= input.kComps; ch++) {
+            pixel[ch] = input(x, y, ch);
+        }
+
+        return pixel;
+    }
+
+    /**
+     * Return interpolated RGBA pixel from source input.
+     *
+     * @param x Horizontal float position.
+     * @param y Vertical float position.
+     */
+    float4 read(float x, float y) {
+        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
+
+        for (int ch = 0; ch <= input.kComps; ch++) {
+            pixel[ch] = bilinear(input, x, y, ch);
+        }
+
+        return pixel;
+    }
+
+    /**
+     * Return RGBA pixel from blend texture input.
+     *
+     * @param x Horizontal integer position.
+     * @param y Vertical integer position.
+     */
+    float4 read_blend(int x, int y) {
+        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
+
+        for (int ch = 0; ch <= blend_tex.kComps; ch++) {
+            pixel[ch] = blend_tex(x, y, ch);
+        }
+
+        return pixel;
+    }
+
+    /**
+     * Write RGBA pixel to destination output.
+     *
+     * @param pixel Reference to a RGBA vector.
+     */
+    void write(float4& pixel) {
+        for (int ch = 0; ch <= output.kComps; ch++) {
+            output(ch) = pixel[ch];
+        }
+    }
+};

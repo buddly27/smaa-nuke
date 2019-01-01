@@ -1,0 +1,93 @@
+kernel SMAALumaEdges : ImageComputationKernel<ePixelWise>
+{
+    Image<eRead, eAccessRandom, eEdgeClamped> input;
+    Image<eWrite> output;
+
+    /**
+     * Process luma edge detection at position.
+     *
+     * @param pos Current image position.
+     */
+    void process(int2 pos) {
+        // SMAA Variables.
+        const float threshold = 0.05f;
+        const float local_contrast_adaptation_factor = 2.0f;
+
+        // Calculate luma weights.
+        const float4 weights(0.2126f, 0.7152f, 0.0722f, 1.0f);
+        const float L = dot(read(pos.x, pos.y), weights);
+        const float L_left = dot(read(pos.x - 1, pos.y), weights);
+        const float L_top  = dot(read(pos.x, pos.y - 1), weights);
+
+        // Detect edge according to threshold.
+        float2 delta_xy = fabs(L - float2(L_left, L_top));
+        float2 edges(
+            (delta_xy[0] > threshold) ? 1.0f : 0.0f,
+            (delta_xy[1] > threshold) ? 1.0f : 0.0f
+        );
+
+        float4 color(0.0f, 0.0f, 0.0f, 1.0f);
+
+        // Discard now if there is no edge.
+        if (dot(edges, float2(1.0f, 1.0f)) != 0.0f) {
+            const float L_right = dot(read(pos.x + 1, pos.y), weights);
+            const float L_bottom  = dot(read(pos.x, pos.y + 1), weights);
+
+            // Calculate the maximum delta in the direct neighborhood.
+            float2 delta_zw = fabs(L - float2(L_right, L_bottom));
+            float2 max_delta = max(delta_xy, delta_zw);
+
+            const float L_left_left = dot(read(pos.x - 2, pos.y), weights);
+            const float L_top_top = dot(read(pos.x, pos.y - 2), weights);
+            delta_zw = fabs(
+                float2(L_left, L_top) - float2(L_left_left, L_top_top)
+            );
+
+            // Calculate the final maximum delta.
+            max_delta = max(float2(max_delta[0], max_delta[1]), delta_zw);
+            const float final_delta = max(max_delta[0], max_delta[1]);
+
+            // Compute local contrast adaptation
+            delta_xy *= local_contrast_adaptation_factor;
+
+            edges *= float2(
+                (delta_xy[0] > final_delta) ? 1.0f : 0.0f,
+                (delta_xy[1] > final_delta) ? 1.0f : 0.0f
+            );
+
+            color[0] = edges[0];
+            color[1] = edges[1];
+        }
+
+        write(color);
+    }
+
+    /**
+     * Return RGBA pixel from source input.
+     *
+     * @param x Horizontal position.
+     * @param y Vertical position.
+     *
+     * @return RGBA pixel.
+     */
+    float4 read(int x, int y) {
+        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
+
+        for (int ch = 0; ch <= input.kComps; ch++) {
+            pixel[ch] = input(x, y, ch);
+        }
+
+        return pixel;
+    }
+
+    /**
+     * Write RGBA pixel to destination output.
+     *
+     * @param pixel Reference to a RGBA vector.
+     */
+    void write(float4& pixel) {
+        for (int ch = 0; ch <= output.kComps; ch++) {
+            output(ch) = pixel[ch];
+        }
+    }
+};

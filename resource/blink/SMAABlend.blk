@@ -1,0 +1,530 @@
+kernel SMAABlend : ImageComputationKernel<ePixelWise>
+{
+    Image<eRead, eAccessRandom, eEdgeClamped> edges_tex;
+    Image<eRead, eAccessRandom, eEdgeClamped> area_tex;
+    Image<eRead, eAccessRandom, eEdgeClamped> search_tex;
+    Image<eWrite> output;
+
+    /**
+     * Compute blending weights at position.
+     *
+     * @param pos Current image position.
+     */
+    void process(int2 pos) {
+        // SMAA Variables.
+        const float max_search_steps = 32.0f;
+        const float max_search_steps_diag = 16.0f;
+        const float corner_rounding = 25.0f;
+
+        // Calculate blending weights.
+        float4 weights(0.0f, 0.0f, 0.0f, 0.0f);
+
+        float4 in_edge = read_edges(pos.x, pos.y);
+
+        // Calculate offsets to look search texture.
+        float4 offset1(-0.25f, -0.125f, 1.25f, -0.125f);
+        float4 offset2(-0.125f, -0.25f, -0.125f, 1.25f);
+        float4 offset3 = (
+            float4(-2.0f, 2.0f, -2.0f, 2.0f) * max_search_steps
+            + float4(offset1[0], offset1[2], offset2[1], offset2[3])
+        );
+
+        // Temp variables:
+        float2 weights_rg;
+        float2 weights_ba;
+
+        // Edges at North
+        if (in_edge[1] > 0.0f) {
+            weights_rg = calculate_diag_weights(pos, max_search_steps_diag - 1);
+            weights[0] = weights_rg[0];
+            weights[1] = weights_rg[1];
+
+            // We give priority to diagonals, so if we find a
+            // diagonal we skip horizontal / vertical processing.
+            if (weights[0] == -weights[1]) {
+                float2 d;
+
+                // Find the distance to the left:
+                float3 coords;
+                coords[0] = search_x_left(
+                    float2(pos.x + offset1[0], pos.y + offset1[1]),
+                    pos.x + offset3[0]
+                );
+                coords[1] = pos.y + offset2[1];
+                d[0] = coords[0];
+
+                // Fetch the left crossing edges:
+                float e1 = bilinear(edges_tex, coords[0], coords[1], 0);
+
+                // Find the distance to the right:
+                coords[2] = search_x_right(
+                    float2(pos.x + offset1[2], pos.y + offset1[3]),
+                    pos.x + offset3[1]
+                );
+                d[1] = coords[2];
+
+                d = float2(
+                    fabs(round(d.x - pos.x)),
+                    fabs(round(d.y - pos.x))
+                );
+
+                // SMAAArea needs a sqrt, as the areas texture is compressed
+                // quadratically:
+                float2 sqrt_d = sqrt(d);
+
+                // Fetch the right crossing edges:
+                float e2 = bilinear(edges_tex, coords[2] + 1, coords[1], 0);
+
+                // Fetch the area:
+                weights_rg = area(sqrt_d, e1, e2);
+                weights[0] = weights_rg[0];
+                weights[1] = weights_rg[1];
+            }
+            else {
+                // Skip vertical processing.
+                in_edge[0] = 0.0f;
+            }
+        }
+
+        // Edges at West
+        if (in_edge[0] > 0.0f) {
+            float2 d;
+
+            // Find the distance to the top:
+            float3 coords;
+            coords[1] = search_y_up(
+                float2(pos.x + offset2[0], pos.y + offset2[1]),
+                pos.y + offset3[2]
+            );
+            coords[0] = pos.x + offset1[0];
+            d[0] = coords[1];
+
+            // Fetch the top crossing edges:
+            float e1 = bilinear(edges_tex, coords[0], coords[1])[1];
+
+            // Find the distance to the bottom:
+            coords[2] = search_y_down(
+                float2(pos.x + offset2[2], pos.y + offset2[3]),
+                pos.y + offset3[3]
+            );
+            d[1] = coords[2];
+
+            d = float2(
+                fabs(round(d.x - pos.y)),
+                fabs(round(d.y - pos.y))
+            );
+
+            // SMAAArea needs a sqrt, as the areas texture is compressed
+            // quadratically:
+            float2 sqrt_d = sqrt(d);
+
+            // Fetch the bottom crossing edges:
+            float e2 = bilinear(edges_tex, coords[0], coords[2] + 1)[1];
+
+            // Get the area for this direction:
+            weights_ba = area(sqrt_d, e1, e2);
+            weights[2] = weights_ba[0];
+            weights[3] = weights_ba[1];
+        }
+
+        write(weights);
+    }
+
+    /**
+     * Look for diagonal patterns and returns the corresponding weights.
+     *
+     * @param pos Current image position.
+     * @param max_steps Maximum steps performed in diagonal pattern searches.
+     *
+     * @return 4-Dimensional weight vector.
+     */
+    float2 calculate_diag_weights(int2 pos, float max_steps) {
+        float2 weights(0.0f, 0.0f);
+
+        float4 in_edge = read_edges(pos.x, pos.y);
+
+        // Search for the line ends:
+        float4 d;
+        float2 end;
+
+        // Temp variables:
+        float2 d_xz;
+        float2 d_yw;
+
+        if (in_edge[0] > 0.0f) {
+            d_xz = search_diag_1(pos, int2(-1, 1), end, max_steps);
+            d[0] = d_xz[0] + (end[1] > 0.9f);
+            d[2] = d_xz[1];
+        }
+        else {
+            d[0] = 0.0f;
+            d[2] = 0.0f;
+        }
+
+        d_yw = search_diag_1(pos, int2(1, -1), end, max_steps);
+        d[1] = d_yw[0];
+        d[3] = d_yw[1];
+
+        if (d[0] + d[1] > 2.0f) {
+            float4 coords(
+                pos.x - d.x,
+                pos.y + d.x,
+                pos.x + d.y,
+                pos.y - d.y
+            );
+
+            // Fetch the crossing edges:
+            float4 c(
+                bilinear(edges_tex, coords.x - 1, coords.y, 1),
+                bilinear(edges_tex, coords.x, coords.y, 0),
+                bilinear(edges_tex, coords.z + 1, coords.w, 1),
+                bilinear(edges_tex, coords.z + 1, coords.w - 1, 0)
+            );
+
+            // Merge crossing edges at each side into a single value:
+            float2 cc = float2(2.0, 2.0) * float2(c[0], c[2]) + float2(c[1], c[3]);
+
+            // Remove the crossing edge if we didn't found the end of the line:
+            cc[0] = (d[2] > 0.9f) ? 0.0f : cc[0];
+            cc[1] = (d[3] > 0.9f) ? 0.0f : cc[1];
+
+            // Fetch the areas for this line:
+            weights += area_diag(float2(d[0], d[1]), cc);
+        }
+
+        // Search for the line ends:
+        d_xz = search_diag_2(pos, int2(-1, -1), end, max_steps);
+        d[0] = d_xz[0];
+        d[2] = d_xz[1];
+
+        if (edges_tex(pos.x + 1, pos.y, 0) > 0.0f) {
+            d_yw = search_diag_2(pos, int2(1, 1), end, max_steps);
+            d[1] = d_yw[0] + (end[1] > 0.9f);
+            d[3] = d_yw[1];
+        }
+        else {
+            d[1] = 0.0f;
+            d[3] = 0.0f;
+        }
+
+        if (d[0] + d[1] > 2.0f) {
+            float4 coords(
+                pos.x - d.x,
+                pos.y - d.x,
+                pos.x + d.y,
+                pos.y + d.y
+            );
+
+            // Fetch the crossing edges:
+            float4 c;
+            c[0] = bilinear(edges_tex, coords.x - 1, coords.y, 1);
+            c[1] = bilinear(edges_tex, coords.x, coords.y -1, 0);
+
+            float4 c_zw = read_edges(coords.z + 1, coords.w);
+            c[2] = c_zw[1];
+            c[3] = c_zw[0];
+
+            // Merge crossing edges at each side into a single value:
+            float2 cc = float2(2.0, 2.0) * float2(c[0], c[2]) + float2(c[1], c[3]);
+
+            // Remove the crossing edge if we didn't found the end of the line:
+            cc[0] = (d[2] > 0.9f) ? 0.0f : cc[0];
+            cc[1] = (d[3] > 0.9f) ? 0.0f : cc[1];
+
+            // Fetch the areas for this line:
+            float2 in_area = area_diag(float2(d[0], d[1]), cc);
+            weights += float2(in_area[1], in_area[0]);
+        }
+
+        return weights;
+    }
+
+    /**
+     * Diagonal pattern search (Pass 1).
+     *
+     * @param pos Current image position.
+     * @param dir 2-Dimensional direction vector.
+     * @param end Reference to the end of line.
+     * @param max_steps Maximum steps for pattern search.
+     *
+     * @return 2-Dimensional end of line position vector.
+     */
+    float2 search_diag_1(int2 pos, int2 dir, float2& end, float max_steps) {
+        float4 coords(pos.x, pos.y, -1.0f, 1.0f);
+
+        while (coords[2] < max_steps && coords[3] > 0.9f) {
+            coords += float4(dir[0], dir[1], 1.0f, 0.0f);
+            float4 in_edge = read_edges(coords[0], coords[1]);
+            end = float2(in_edge[0], in_edge[1]);
+            coords[3] = dot(end, float2(0.5f, 0.5f));
+        }
+
+        return float2(coords[2], coords[3]);
+    }
+
+    /**
+     * Diagonal pattern search (Pass 2).
+     *
+     * @param pos Current image position.
+     * @param dir 2-Dimensional direction vector.
+     * @param end Reference to the end of line.
+     * @param max_steps Maximum steps for pattern search.
+     *
+     * @return 2-Dimensional end of line position vector.
+     */
+    float2 search_diag_2(int2 pos, int2 dir, float2& end, float max_steps) {
+        float4 coords(pos.x, pos.y, -1.0f, 1.0f);
+        coords[0] += 0.25f;
+
+        while (coords[2] < max_steps && coords[3] > 0.9f) {
+            coords += float4(dir[0], dir[1], 1.0f, 0.0f);
+            end[1] = edges_tex(coords[0], coords[1], 1);
+            end[0] = edges_tex(coords[0] + 1, coords[1], 0);
+            coords[3] = dot(end, float2(0.5f, 0.5f));
+        }
+
+        return float2(coords[2], coords[3]);
+    }
+
+    /**
+     * Compute area corresponding to a distance and crossing edges.
+     *
+     * @param dist Distance.
+     * @param e Crossing edges.
+     *
+     * @return 2-Dimensional area vector.
+     */
+    float2 area(float2 dist, float e1, float e2) {
+        float max_distance = 16.0f;
+
+        float2 coords(
+            max_distance * round(4.0f * e1) + dist[0],
+            max_distance * round(4.0f * e2) + dist[1]
+        );
+
+        // Add bias:
+        coords += float2(0.5f, 0.5f);
+
+        float4 in_area = read_area(coords[0], coords[1]);
+        return float2(in_area[0], in_area[1]);
+    }
+
+    /**
+     * Compute area corresponding to a diagonal distance and crossing edges.
+     *
+     * @param dist Diagonal distance.
+     * @param e Crossing edges.
+     *
+     * @return 2-Dimensional area vector.
+     */
+    float2 area_diag(float2 dist, float2 e) {
+        float max_distance_diag = 20.0f;
+
+        float2 max_distance_diag2 = float2(
+            max_distance_diag, max_distance_diag
+        );
+        float2 coords = max_distance_diag2 * e + dist;
+
+        // Diagonal areas are on the second half of the texture:
+        coords.x += 80.0f;
+
+        float4 in_area = read_area(coords[0], coords[1]);
+        return float2(in_area[0], in_area[1]);
+    }
+
+    /**
+     * Horizontal Left pattern search.
+     *
+     * @param coords 2-Dimensional float position.
+     * @param end End of line.
+     *
+     * @return 2-Dimensional position vector.
+     */
+    float search_x_left(float2 coords, float end) {
+        float2 e(0.0f, 1.0f);
+
+        while (coords[0] > end && e[1] > 0.8281f && e[0] == 0.0f) {
+            float4 in_edge = read_edges(coords[0], coords[1]);
+            e = float2(in_edge[0], in_edge[1]);
+            coords -= float2(2.0f, 0.0f);
+        }
+
+        float offset = -(255.0f / 127.0f) * search_length(e, 0.0f) + 3.25f;
+        return coords[0] + offset;
+    }
+
+    /**
+     * Horizontal Right pattern search.
+     *
+     * @param coords 2-Dimensional float position.
+     * @param end End of line.
+     *
+     * @return 2-Dimensional position vector.
+     */
+    float search_x_right(float2 coords, float end) {
+        float2 e(0.0f, 1.0f);
+
+        while (coords[0] < end && e[1] > 0.8281f && e[0] == 0.0f) {
+            float4 in_edge = read_edges(coords[0], coords[1]);
+            e = float2(in_edge[0], in_edge[1]);
+            coords += float2(2.0f, 0.0f);
+        }
+
+        float offset = -(255.0f / 127.0f) * search_length(e, 0.5f) + 3.25f;
+        return coords[0] - offset;
+    }
+
+    /**
+     * Vertical Top pattern search.
+     *
+     * @param coords 2-Dimensional float position.
+     * @param end End of line.
+     *
+     * @return 2-Dimensional position vector.
+     */
+    float search_y_up(float2 coords, float end) {
+        float2 e(1.0f, 0.0f);
+
+        while (coords[1] > end && e[0] > 0.8281f && e[1] == 0.0f) {
+            float4 in_edge = read_edges(coords[0], coords[1]);
+            e = float2(in_edge[0], in_edge[1]);
+            coords -= float2(0.0f, 2.0f);
+        }
+
+        float2 e_inv(e[1], e[0]);
+        float offset = -(255.0f / 127.0f) * search_length(e_inv, 0.0f) + 3.25f;
+        return coords[1] + offset;
+    }
+
+    /**
+     * Vertical Bottom pattern search.
+     *
+     * @param coords 2-Dimensional float position.
+     * @param end End of line.
+     *
+     * @return 2-Dimensional position vector.
+     */
+    float search_y_down(float2 coords, float end) {
+        float2 e(1.0f, 0.0f);
+
+        while (coords[1] < end && e[0] > 0.8281f && e[1] == 0.0f) {
+            float4 in_edge = read_edges(coords[0], coords[1]);
+            e = float2(in_edge[0], in_edge[1]);
+            coords += float2(0.0f, 2.0f);
+        }
+
+        float2 e_inv(e[1], e[0]);
+        float offset = -(255.0f / 127.0f) * search_length(e_inv, 0.5f) + 3.25f;
+        return coords[1] - offset;
+    }
+
+    /**
+     * Compute length necessary in the last step of the searches.
+     *
+     * @param e 2-Dimensional interpolated edge vector.
+     * @param offset Offset value.
+     *
+     * @return Length value.
+     */
+    float search_length(float2 e, float offset) {
+        const float2 search_tex_size(66.0f, 33.0f);
+
+        // The texture is flipped vertically, with left and right cases taking
+        // half of the space horizontally:
+        float2 scale = search_tex_size * float2(0.5f, -1.0f);
+        float2 bias = search_tex_size * float2(offset, 1.0f);
+
+        // Scale and bias to access texel centers:
+        scale += float2(-1.0f, 1.0f);
+        bias  += float2(0.5f, -0.5f);
+
+        // Lookup the search texture:
+        const float2 coords = scale * e + bias;
+        return fetch_from_search_texture(coords);
+    }
+
+    /**
+     * Return RGBA pixel from edges texture input.
+     *
+     * @param x Horizontal integer position.
+     * @param y Vertical integer position.
+     */
+    float4 read_edges(int x, int y) {
+        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
+
+        for (int ch = 0; ch <= edges_tex.kComps; ch++) {
+            pixel[ch] = edges_tex(x, y, ch);
+        }
+
+        return pixel;
+    }
+
+    /**
+     * Return interpolated RGBA pixel from edges texture input.
+     *
+     * @param x Horizontal float position.
+     * @param y Vertical float position.
+     */
+    float4 read_edges(float x, float y) {
+        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
+
+        for (int ch = 0; ch <= edges_tex.kComps; ch++) {
+            pixel[ch] = bilinear(edges_tex, x, y, ch);
+        }
+
+        return pixel;
+    }
+
+    /**
+     * Return interpolated RGBA pixel from area texture input.
+     *
+     * @param x Horizontal float position.
+     * @param y Vertical float position.
+     *
+     * @return RGBA pixel.
+     */
+    float4 read_area(float x, float y) {
+        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
+
+        for (int ch = 0; ch <= area_tex.kComps; ch++) {
+            pixel[ch] = bilinear(area_tex, x, y, ch) / 255.0f;
+        }
+
+        return pixel;
+    }
+
+    /**
+     * Return maximum value from all neighbor pixels within search texture.
+     *
+     * This is a compromise way to get the most accurate value as the bilinear
+     * function from blink does an average from the 4 neighbor pixels, which
+     * give incorrect value. There must be a better way...
+     *
+     * @param coords 2-Dimensional float position.
+     *
+     * @return Search value.
+     */
+    float fetch_from_search_texture(float2 coords) {
+        return max(
+            max(
+                search_tex(floor(coords[0]), floor(coords[1]), 0),
+                search_tex(ceil(coords[0]), ceil(coords[1]), 0)
+            ),
+            max(
+                search_tex(floor(coords[0]), ceil(coords[1]), 0),
+                search_tex(ceil(coords[0]), floor(coords[1]), 0)
+            )
+        ) / 255.0f;
+    }
+
+    /**
+     * Write RGBA pixel to destination output.
+     *
+     * @param pixel Reference to a RGBA vector.
+     */
+    void write(float4& pixel) {
+        for (int ch = 0; ch <= output.kComps; ch++) {
+            output(ch) = pixel[ch];
+        }
+    }
+};
