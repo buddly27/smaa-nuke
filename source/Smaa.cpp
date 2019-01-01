@@ -29,7 +29,7 @@ static const char* const HELP = "Subpixel Morphological Anti-Aliasing";
 
 static DD::Image::Iop* build(Node *node) {
     DD::Image::NukeWrapper* w = new DD::Image::NukeWrapper(new Nuke::Smaa(node));
-    return w->channels(DD::Image::Mask_RGBA);
+    return w->channels(DD::Image::Mask_All);
 }
 const DD::Image::Iop::Description Nuke::Smaa::description(
     CLASS, "Filter/Smaa", build
