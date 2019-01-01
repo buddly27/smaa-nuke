@@ -1,3 +1,12 @@
+/**
+ * Copyright (C) 2019, Jeremy Retailleau
+ *
+ * Adapted from:
+ *
+ * Jorge Jimenez et al. (2013). Enhanced Subpixel Morphological Antialiasing.
+ * http://www.iryoku.com/smaa/
+ */
+
 kernel SMAANeighborhood : ImageComputationKernel<ePixelWise>
 {
     Image<eRead, eAccessRandom, eEdgeClamped> input;
