@@ -38,10 +38,6 @@ const DD::Image::Iop::Description Nuke::Smaa::description(
 
 namespace Nuke {
 
-static const char* const smaa_presets[]  = {
-    "Low", "Medium", "High", "Ultra", 0
-};
-
 const char* Smaa::Class() const { return CLASS; }
 const char* Smaa::node_help() const { return HELP; }
 
