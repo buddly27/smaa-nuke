@@ -30,3 +30,12 @@
 *.exe
 *.out
 *.app
+
+# Development
+.project
+.settings
+.idea/
+.history/
+
+# CMake
+cmake-build-*/
