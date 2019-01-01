@@ -36,4 +36,4 @@ set_target_properties(Smaa PROPERTIES PREFIX "")
 SET(CMAKE_SKIP_RPATH TRUE)
 
 # Once built, copy the library into install location.
-install(TARGETS Smaa DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/nuke-${NUKE_VERSION})
+install(TARGETS Smaa DESTINATION ${CMAKE_INSTALL_PREFIX}/smaa/nuke-${NUKE_VERSION})
