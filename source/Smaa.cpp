@@ -1,3 +1,10 @@
+/**
+ * Copyright (C) 2019, Jeremy Retailleau
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 #include <string>
 #include <vector>
 
@@ -32,7 +39,7 @@ const DD::Image::Iop::Description Nuke::Smaa::description(
 namespace Nuke {
 
 static const char* const smaa_presets[]  = {
-    "Low", "Medium", "High", "Ultra", 0x0
+    "Low", "Medium", "High", "Ultra", 0
 };
 
 const char* Smaa::Class() const { return CLASS; }
