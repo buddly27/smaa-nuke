@@ -6,6 +6,7 @@
  */
 
 #include <string>
+#include <sstream>
 #include <vector>
 
 #include "DDImage/PlanarIop.h"
@@ -157,8 +158,10 @@ void Smaa::run_edges_detection(
         edges_kernel.iterate();
     }
     catch (Blink::ParseException& e) {
+        std::ostringstream line_number;
+        line_number << e.lineNumber();
         std::string message = (
-            "Edge Detection (L" + std::to_string(e.lineNumber()) + "): "
+            "Edge Detection (L" + line_number.str() + "): "
             + e.parseError()
         );
         error(message.c_str());
@@ -208,8 +211,10 @@ void Smaa::run_blending_weight_calculation(
         blend_kernel.iterate();
     }
     catch (Blink::ParseException& e) {
+        std::ostringstream line_number;
+        line_number << e.lineNumber();
         std::string message = (
-            "Blend Computation (L" + std::to_string(e.lineNumber()) + "): "
+            "Blend Computation (L" + line_number.str() + "): "
             + e.parseError()
         );
         error(message.c_str());
@@ -237,8 +242,10 @@ void Smaa::run_neighborhood_blending(
         neighborhood_kernel.iterate();
     }
     catch (Blink::ParseException& e) {
+        std::ostringstream line_number;
+        line_number << e.lineNumber();
         std::string message = (
-            "Neighborhood Blending (L" + std::to_string(e.lineNumber()) + "): "
+            "Neighborhood Blending (L" + line_number.str() + "): "
             + e.parseError()
         );
         error(message.c_str());

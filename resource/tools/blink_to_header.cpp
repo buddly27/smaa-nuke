@@ -48,7 +48,7 @@ int main(int argc, char** args)
     output += "#define " + var + "\n\n";
     output += "static const char* const " + name + " = \\";
 
-    std::ifstream input_stream(input_file);
+    std::ifstream input_stream(input_file.c_str());
     if (input_stream.is_open())
     {
         std::string line;
@@ -68,7 +68,7 @@ int main(int argc, char** args)
     output += "#endif // " + var;
 
     // Extract header file.
-    std::ofstream output_stream(output_file);
+    std::ofstream output_stream(output_file.c_str());
     if (output_stream.is_open())
     {
         output_stream << output;
