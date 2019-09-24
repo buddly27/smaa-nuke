@@ -11,7 +11,6 @@
 
 #include "DDImage/PlanarIop.h"
 #include "DDImage/Knobs.h"
-#include "DDImage/NukeWrapper.h"
 #include "DDImage/Channel.h"
 #include "DDImage/Blink.h"
 
@@ -29,8 +28,7 @@ static const char* const CLASS = "Smaa";
 static const char* const HELP = "Subpixel Morphological Anti-Aliasing";
 
 static DD::Image::Iop* build(Node *node) {
-    DD::Image::NukeWrapper* w = new DD::Image::NukeWrapper(new Nuke::Smaa(node));
-    return w->channels(DD::Image::Mask_All);
+    return new Nuke::Smaa(node);
 }
 const DD::Image::Iop::Description Nuke::Smaa::description(
     CLASS, "Filter/Smaa", build
