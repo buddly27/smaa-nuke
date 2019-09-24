@@ -31,7 +31,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         // Calculate blending weights.
         float4 weights(0.0f, 0.0f, 0.0f, 0.0f);
 
-        float4 in_edge = read_edges(pos.x, pos.y);
+        float4 in_edge = edges_tex(pos.x, pos.y);
 
         // Calculate offsets to look search texture.
         float4 offset1(-0.25f, -0.125f, 1.25f, -0.125f);
@@ -139,7 +139,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
             weights[3] = weights_ba[1];
         }
 
-        write(weights);
+        output() = weights;
     }
 
     /**
@@ -153,7 +153,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
     float2 calculate_diag_weights(int2 pos, float max_steps) {
         float2 weights(0.0f, 0.0f);
 
-        float4 in_edge = read_edges(pos.x, pos.y);
+        float4 in_edge = edges_tex(pos.x, pos.y);
 
         // Search for the line ends:
         float4 d;
@@ -232,7 +232,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
             c[0] = bilinear(edges_tex, coords.x - 1, coords.y, 1);
             c[1] = bilinear(edges_tex, coords.x, coords.y -1, 0);
 
-            float4 c_zw = read_edges(coords.z + 1, coords.w);
+            float4 c_zw = bilinear(edges_tex, coords.z + 1, coords.w);
             c[2] = c_zw[1];
             c[3] = c_zw[0];
 
@@ -266,7 +266,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
 
         while (coords[2] < max_steps && coords[3] > 0.9f) {
             coords += float4(dir[0], dir[1], 1.0f, 0.0f);
-            float4 in_edge = read_edges(coords[0], coords[1]);
+            float4 in_edge = edges_tex(coords[0], coords[1]);
             end = float2(in_edge[0], in_edge[1]);
             coords[3] = dot(end, float2(0.5f, 0.5f));
         }
@@ -317,7 +317,8 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         // Add bias:
         coords += float2(0.5f, 0.5f);
 
-        float4 in_area = read_area(coords[0], coords[1]);
+
+        float4 in_area = bilinear(area_tex, coords[0], coords[1]);
         return float2(in_area[0], in_area[1]);
     }
 
@@ -340,7 +341,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         // Diagonal areas are on the second half of the texture:
         coords.x += 80.0f;
 
-        float4 in_area = read_area(coords[0], coords[1]);
+        float4 in_area = bilinear(area_tex, coords[0], coords[1]);
         return float2(in_area[0], in_area[1]);
     }
 
@@ -356,7 +357,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         float2 e(0.0f, 1.0f);
 
         while (coords[0] > end && e[1] > 0.8281f && e[0] == 0.0f) {
-            float4 in_edge = read_edges(coords[0], coords[1]);
+            float4 in_edge = bilinear(edges_tex, coords[0], coords[1]);
             e = float2(in_edge[0], in_edge[1]);
             coords -= float2(2.0f, 0.0f);
         }
@@ -377,7 +378,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         float2 e(0.0f, 1.0f);
 
         while (coords[0] < end && e[1] > 0.8281f && e[0] == 0.0f) {
-            float4 in_edge = read_edges(coords[0], coords[1]);
+            float4 in_edge = bilinear(edges_tex, coords[0], coords[1]);
             e = float2(in_edge[0], in_edge[1]);
             coords += float2(2.0f, 0.0f);
         }
@@ -398,7 +399,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         float2 e(1.0f, 0.0f);
 
         while (coords[1] > end && e[0] > 0.8281f && e[1] == 0.0f) {
-            float4 in_edge = read_edges(coords[0], coords[1]);
+            float4 in_edge = bilinear(edges_tex, coords[0], coords[1]);
             e = float2(in_edge[0], in_edge[1]);
             coords -= float2(0.0f, 2.0f);
         }
@@ -420,7 +421,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         float2 e(1.0f, 0.0f);
 
         while (coords[1] < end && e[0] > 0.8281f && e[1] == 0.0f) {
-            float4 in_edge = read_edges(coords[0], coords[1]);
+            float4 in_edge = bilinear(edges_tex, coords[0], coords[1]);
             e = float2(in_edge[0], in_edge[1]);
             coords += float2(0.0f, 2.0f);
         }
@@ -456,56 +457,6 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
     }
 
     /**
-     * Return RGBA pixel from edges texture input.
-     *
-     * @param x Horizontal integer position.
-     * @param y Vertical integer position.
-     */
-    float4 read_edges(int x, int y) {
-        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
-
-        for (int ch = 0; ch <= edges_tex.kComps; ch++) {
-            pixel[ch] = edges_tex(x, y, ch);
-        }
-
-        return pixel;
-    }
-
-    /**
-     * Return interpolated RGBA pixel from edges texture input.
-     *
-     * @param x Horizontal float position.
-     * @param y Vertical float position.
-     */
-    float4 read_edges(float x, float y) {
-        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
-
-        for (int ch = 0; ch <= edges_tex.kComps; ch++) {
-            pixel[ch] = bilinear(edges_tex, x, y, ch);
-        }
-
-        return pixel;
-    }
-
-    /**
-     * Return interpolated RGBA pixel from area texture input.
-     *
-     * @param x Horizontal float position.
-     * @param y Vertical float position.
-     *
-     * @return RGBA pixel.
-     */
-    float4 read_area(float x, float y) {
-        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
-
-        for (int ch = 0; ch <= area_tex.kComps; ch++) {
-            pixel[ch] = bilinear(area_tex, x, y, ch) / 255.0f;
-        }
-
-        return pixel;
-    }
-
-    /**
      * Return maximum value from all neighbor pixels within search texture.
      *
      * This is a compromise way to get the most accurate value as the bilinear
@@ -527,16 +478,5 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
                 search_tex(ceil(coords[0]), floor(coords[1]), 0)
             )
         ) / 255.0f;
-    }
-
-    /**
-     * Write RGBA pixel to destination output.
-     *
-     * @param pixel Reference to a RGBA vector.
-     */
-    void write(float4& pixel) {
-        for (int ch = 0; ch <= output.kComps; ch++) {
-            output(ch) = pixel[ch];
-        }
     }
 };

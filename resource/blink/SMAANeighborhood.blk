@@ -22,7 +22,7 @@ kernel SMAANeighborhood : ImageComputationKernel<ePixelWise>
      * @param pos Current image position.
      */
     void process(int2 pos) {
-        float4 in_blend = read_blend(pos.x, pos.y);
+        float4 in_blend = blend_tex(pos.x, pos.y);
 
         // Fetch the blending weights for current pixel:
         float4 a(
@@ -35,7 +35,7 @@ kernel SMAANeighborhood : ImageComputationKernel<ePixelWise>
         float4 color;
 
         if (dot(a, float4(1.0, 1.0, 1.0, 1.0)) < 0.01f) {
-            color = read(pos.x, pos.y);
+            color = input(pos.x, pos.y);
         }
         else {
             bool h = max(a[0], a[2]) > max(a[1], a[3]);
@@ -57,69 +57,10 @@ kernel SMAANeighborhood : ImageComputationKernel<ePixelWise>
                 pos.y - blending_offset[3]
             );
 
-            color = blending_weight[0] * read(coord[0], coord[1]);
-            color += blending_weight[1] * read(coord[2], coord[3]);
+            color = blending_weight[0] * bilinear(input, coord[0], coord[1]);
+            color += blending_weight[1] * bilinear(input, coord[2], coord[3]);
         }
 
-        write(color);
-    }
-
-    /**
-     * Return RGBA pixel from source input.
-     *
-     * @param x Horizontal integer position.
-     * @param y Vertical integer position.
-     */
-    float4 read(int x, int y) {
-        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
-
-        for (int ch = 0; ch <= input.kComps; ch++) {
-            pixel[ch] = input(x, y, ch);
-        }
-
-        return pixel;
-    }
-
-    /**
-     * Return interpolated RGBA pixel from source input.
-     *
-     * @param x Horizontal float position.
-     * @param y Vertical float position.
-     */
-    float4 read(float x, float y) {
-        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
-
-        for (int ch = 0; ch <= input.kComps; ch++) {
-            pixel[ch] = bilinear(input, x, y, ch);
-        }
-
-        return pixel;
-    }
-
-    /**
-     * Return RGBA pixel from blend texture input.
-     *
-     * @param x Horizontal integer position.
-     * @param y Vertical integer position.
-     */
-    float4 read_blend(int x, int y) {
-        float4 pixel(0.0f, 0.0f, 0.0f, 1.0f);
-
-        for (int ch = 0; ch <= blend_tex.kComps; ch++) {
-            pixel[ch] = blend_tex(x, y, ch);
-        }
-
-        return pixel;
-    }
-
-    /**
-     * Write RGBA pixel to destination output.
-     *
-     * @param pixel Reference to a RGBA vector.
-     */
-    void write(float4& pixel) {
-        for (int ch = 0; ch <= output.kComps; ch++) {
-            output(ch) = pixel[ch];
-        }
+        output() = color;
     }
 };
