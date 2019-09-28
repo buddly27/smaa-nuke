@@ -46,21 +46,21 @@ protected:
 
     void run_edges_detection(
         Blink::ComputeDevice device,
-        Blink::Image input,
-        Blink::Image edges_tex
+        const Blink::Image& input,
+        const Blink::Image& edges_tex
     );
 
     void run_blending_weight_calculation(
         Blink::ComputeDevice device,
-        Blink::Image edges_tex,
-        Blink::Image blend_tex
+        const Blink::Image& edges_tex,
+        const Blink::Image& blend_tex
     );
 
     void run_neighborhood_blending(
         Blink::ComputeDevice device,
-        Blink::Image input,
-        Blink::Image blend_tex,
-        Blink::Image output
+        const Blink::Image& input,
+        const Blink::Image& blend_tex,
+        const Blink::Image& output
     );
 
 private:

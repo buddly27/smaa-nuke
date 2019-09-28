@@ -73,7 +73,9 @@ void Smaa::_validate(bool)
 }
 
 void Smaa::getRequests(
-    const DD::Image::Box &box,const DD::Image::ChannelSet &channels, int count,
+    const DD::Image::Box &box,
+    const DD::Image::ChannelSet &channels,
+    int count,
     DD::Image::RequestOutput &data
 ) const
 {
@@ -142,7 +144,9 @@ void Smaa::renderStripe(DD::Image::ImagePlane &output_plane)
 }
 
 void Smaa::run_edges_detection(
-    Blink::ComputeDevice device, Blink::Image input, Blink::Image edges_tex
+    Blink::ComputeDevice device,
+    const Blink::Image& input,
+    const Blink::Image& edges_tex
 )
 {
     std::vector<Blink::Image> images;
@@ -171,12 +175,14 @@ void Smaa::run_edges_detection(
 }
 
 void Smaa::run_blending_weight_calculation(
-    Blink::ComputeDevice device, Blink::Image edges_tex, Blink::Image blend_tex
+    Blink::ComputeDevice device,
+    const Blink::Image& edges_tex,
+    const Blink::Image& blend_tex
 )
 {
     // Create Blink images from SMAA Search texture.
     Blink::Rect search_tex_rect(0, 0, SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT);
-    Blink::PixelInfo search_tex_pixel(1, kBlinkDataUByte);
+    Blink::PixelInfo search_tex_pixel(1, kBlinkDataFloat);
 
     Blink::Image search_tex = Blink::Image(
         Blink::ImageInfo(search_tex_rect, search_tex_pixel), device
@@ -187,7 +193,7 @@ void Smaa::run_blending_weight_calculation(
 
     // Create Blink images from SMAA Area texture.
     Blink::Rect area_tex_rect(0, 0, AREATEX_WIDTH, AREATEX_HEIGHT);
-    Blink::PixelInfo area_tex_pixel(2, kBlinkDataUByte);
+    Blink::PixelInfo area_tex_pixel(2, kBlinkDataFloat);
 
     Blink::Image area_tex = Blink::Image(
         Blink::ImageInfo(area_tex_rect, area_tex_pixel), device
@@ -224,8 +230,10 @@ void Smaa::run_blending_weight_calculation(
 }
 
 void Smaa::run_neighborhood_blending(
-    Blink::ComputeDevice device, Blink::Image input, Blink::Image blend_tex,
-    Blink::Image output
+    Blink::ComputeDevice device,
+    const Blink::Image& input,
+    const Blink::Image& blend_tex,
+    const Blink::Image& output
 )
 {
     std::vector<Blink::Image> images;

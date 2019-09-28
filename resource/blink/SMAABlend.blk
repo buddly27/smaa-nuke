@@ -317,7 +317,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         // Add bias:
         coords += float2(0.5f, 0.5f);
 
-        float4 in_area = bilinear(area_tex, coords[0], coords[1]);
+        SampleType(area_tex) in_area = bilinear(area_tex, coords[0], coords[1]);
         return float2(in_area[0], in_area[1]);
     }
 
@@ -340,7 +340,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         // Diagonal areas are on the second half of the texture:
         coords.x += 80.0f;
 
-        float4 in_area = bilinear(area_tex, coords[0], coords[1]);
+        SampleType(area_tex) in_area = bilinear(area_tex, coords[0], coords[1]);
         return float2(in_area[0], in_area[1]);
     }
 
