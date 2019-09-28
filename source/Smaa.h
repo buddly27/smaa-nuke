@@ -63,6 +63,9 @@ protected:
         const Blink::Image& output
     );
 
+    static Blink::Image create_search_texture(Blink::ComputeDevice device);
+    static Blink::Image create_area_texture(Blink::ComputeDevice device);
+
 private:
     Blink::ComputeDevice _gpu_device;
     bool _use_gpu_if_available;

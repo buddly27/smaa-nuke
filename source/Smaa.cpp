@@ -180,27 +180,8 @@ void Smaa::run_blending_weight_calculation(
     const Blink::Image& blend_tex
 )
 {
-    // Create Blink images from SMAA Search texture.
-    Blink::Rect search_tex_rect(0, 0, SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT);
-    Blink::PixelInfo search_tex_pixel(1, kBlinkDataFloat);
-
-    Blink::Image search_tex = Blink::Image(
-        Blink::ImageInfo(search_tex_rect, search_tex_pixel), device
-    );
-    search_tex.copyFromBuffer(
-        searchTexBytes, Blink::BufferDesc(1, SEARCHTEX_PITCH, 1)
-    );
-
-    // Create Blink images from SMAA Area texture.
-    Blink::Rect area_tex_rect(0, 0, AREATEX_WIDTH, AREATEX_HEIGHT);
-    Blink::PixelInfo area_tex_pixel(2, kBlinkDataFloat);
-
-    Blink::Image area_tex = Blink::Image(
-        Blink::ImageInfo(area_tex_rect, area_tex_pixel), device
-    );
-    area_tex.copyFromBuffer(
-        areaTexBytes, Blink::BufferDesc(2, AREATEX_PITCH, 1)
-    );
+    Blink::Image search_tex = create_search_texture(device);
+    Blink::Image area_tex = create_area_texture(device);
 
     std::vector<Blink::Image> images;
     images.push_back(edges_tex);
@@ -260,6 +241,28 @@ void Smaa::run_neighborhood_blending(
         std::string message = "Neighborhood Blending: " + e.userMessage();
         error(message.c_str());
     }
+}
+
+Blink::Image Smaa::create_search_texture(Blink::ComputeDevice device) {
+    Blink::Rect rect(0, 0, SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT);
+    Blink::PixelInfo pixelInfo(1, kBlinkDataFloat);
+    Blink::ImageInfo imageInfo(rect, pixelInfo);
+
+    Blink::Image image = Blink::Image(imageInfo, device);
+    Blink::BufferDesc bufferDesc(1, SEARCHTEX_PITCH, 1);
+    image.copyFromBuffer(searchTexBytes, bufferDesc);
+    return image;
+}
+
+Blink::Image Smaa::create_area_texture(Blink::ComputeDevice device) {
+    Blink::Rect rect(0, 0, AREATEX_WIDTH, AREATEX_HEIGHT);
+    Blink::PixelInfo pixelInfo(2, kBlinkDataFloat);
+    Blink::ImageInfo imageInfo(rect, pixelInfo);
+
+    Blink::Image image = Blink::Image(imageInfo, device);
+    Blink::BufferDesc bufferDesc(2, AREATEX_PITCH, 1);
+    image.copyFromBuffer(areaTexBytes, bufferDesc);
+    return image;
 }
 
 } // namespace Nuke
