@@ -7,7 +7,7 @@ Nuke using Blink API.
 
 ## Building
 
-Build the plugin as follow:
+Build the plugin as follows:
 
 ```bash
 cd smaa-nuke
@@ -16,7 +16,7 @@ cmake -DCMAKE_INSTALL_PREFIX=/tmp ..
 make && make install
 ```
 
-A specific Nuke version can be targeted as follow:
+A specific Nuke version can be targeted as follows:
 
  ```
 cmake -DNUKE_PATH=/path/to/nuke -DCMAKE_INSTALL_PREFIX=/tmp ..
