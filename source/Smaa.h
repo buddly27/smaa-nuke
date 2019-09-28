@@ -63,8 +63,14 @@ protected:
         const Blink::Image& output
     );
 
-    static Blink::Image create_search_texture(Blink::ComputeDevice device);
-    static Blink::Image create_area_texture(Blink::ComputeDevice device);
+    Blink::Image create_search_texture(Blink::ComputeDevice device);
+    Blink::Image create_area_texture(Blink::ComputeDevice device);
+
+    // Convert texture from unsigned char to float array.
+    static void convert_texture(
+        const unsigned char* source, std::vector<float>& destination,
+        int width, int height, int channelNumber
+    );
 
 private:
     Blink::ComputeDevice _gpu_device;
@@ -73,6 +79,9 @@ private:
     Blink::ProgramSource _edges_program;
     Blink::ProgramSource _blend_program;
     Blink::ProgramSource _neighborhood_program;
+
+    std::vector<float> _search_texture;
+    std::vector<float> _area_texture;
 };
 
 } // namespace Nuke

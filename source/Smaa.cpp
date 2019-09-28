@@ -48,6 +48,14 @@ Smaa::Smaa(Node* node)
     , _blend_program(SMAABlend)
     , _neighborhood_program(SMAANeighborhood)
 {
+    convert_texture(
+        searchTexBytes, _search_texture,
+        SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT, 1
+    );
+    convert_texture(
+        areaTexBytes, _area_texture,
+        AREATEX_WIDTH, AREATEX_HEIGHT, 2
+    );
 }
 
 void Smaa::knobs(DD::Image::Knob_Closure &f)
@@ -249,8 +257,12 @@ Blink::Image Smaa::create_search_texture(Blink::ComputeDevice device) {
     Blink::ImageInfo imageInfo(rect, pixelInfo);
 
     Blink::Image image = Blink::Image(imageInfo, device);
-    Blink::BufferDesc bufferDesc(1, SEARCHTEX_PITCH, 1);
-    image.copyFromBuffer(searchTexBytes, bufferDesc);
+    Blink::BufferDesc bufferDesc(
+        sizeof(float),
+        sizeof(float) * SEARCHTEX_WIDTH,
+        sizeof(float)
+    );
+    image.copyFromBuffer(_search_texture.data(), bufferDesc);
     return image;
 }
 
@@ -260,9 +272,25 @@ Blink::Image Smaa::create_area_texture(Blink::ComputeDevice device) {
     Blink::ImageInfo imageInfo(rect, pixelInfo);
 
     Blink::Image image = Blink::Image(imageInfo, device);
-    Blink::BufferDesc bufferDesc(2, AREATEX_PITCH, 1);
-    image.copyFromBuffer(areaTexBytes, bufferDesc);
+    Blink::BufferDesc bufferDesc(
+        sizeof(float) * 2,
+        sizeof(float) * AREATEX_WIDTH,
+        sizeof(float)
+    );
+    image.copyFromBuffer(_area_texture.data(), bufferDesc);
     return image;
+}
+
+void Smaa::convert_texture(
+    const unsigned char* source, std::vector<float>& destination,
+    int width, int height, int channelNumber
+) {
+    const int size = width * height * channelNumber;
+    destination.reserve(size);
+
+    for (int index = 0; index < size; index++) {
+        destination.push_back((float) source[index]);
+    }
 }
 
 } // namespace Nuke

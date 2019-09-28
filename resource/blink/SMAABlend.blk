@@ -318,7 +318,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         coords += float2(0.5f, 0.5f);
 
         SampleType(area_tex) in_area = bilinear(area_tex, coords[0], coords[1]);
-        return float2(in_area[0], in_area[1]);
+        return float2(in_area[0]/255, in_area[1]/255);
     }
 
     /**
@@ -341,7 +341,7 @@ kernel SMAABlend : ImageComputationKernel<ePixelWise>
         coords.x += 80.0f;
 
         SampleType(area_tex) in_area = bilinear(area_tex, coords[0], coords[1]);
-        return float2(in_area[0], in_area[1]);
+        return float2(in_area[0]/255, in_area[1]/255);
     }
 
     /**
