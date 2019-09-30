@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.8)
 project (smaa-nuke)
 
-set(CMAKE_CXX_STANDARD 98)
-#set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Append project Modules directory.
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/resource/cmake")
